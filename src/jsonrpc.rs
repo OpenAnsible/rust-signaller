@@ -1,4 +1,3 @@
-#![feature(box_syntax)]
 #![allow(dead_code)]
 
 extern crate rustc_serialize;
@@ -91,7 +90,7 @@ impl ErrorResponse {
     }
 }
 
-
+#[derive(Debug)]
 pub enum RpcErrorCode {
     ParseError,
     InvalidRequest,
@@ -101,6 +100,7 @@ pub enum RpcErrorCode {
     ServerError
 }
 
+#[derive(Debug)]
 pub struct RpcRequest {
     jsonrpc: String,
     method : String,
@@ -180,7 +180,8 @@ impl RpcRequest {
     fn _parse_version (obj: &json::Object) -> Result<String, RpcErrorCode> {
         match obj.get("jsonrpc") {
             Some(version) => {
-                if json::Json::String("2.0".to_string()) == *version {
+                if json::Json::String("2.0".to_string()) == *version 
+                || json::Json::String("2".to_string()) == *version  {
                     Ok("2.0".to_string())
                 } else {
                     // JsonRpc Version Must Be 2.0. 
@@ -241,6 +242,7 @@ impl RpcRequest {
     }
 }
 
+#[derive(Debug)]
 pub enum RpcResponse {
     SuccessResponse(SuccessResponse),
     ErrorResponse(ErrorResponse)
@@ -266,8 +268,11 @@ impl JsonRpc {
     pub fn new () -> JsonRpc {
         JsonRpc {  methods : BTreeMap::new() }
     }
-    pub fn add_method (&mut self, method: &str, handle: RpcHandle) {
+    pub fn register (&mut self, method: &str, handle: RpcHandle) {
         self.methods.insert(method.to_string(), handle);
+    }
+    pub fn methods(&self) -> &BTreeMap<String, RpcHandle> {
+        &self.methods
     }
     pub fn call(&self, request: &RpcRequest) -> RpcResponse {
         match self.methods.get(&request.method) {
@@ -300,15 +305,16 @@ impl JsonRpc {
 
     }
 }
-
+unsafe impl Send for JsonRpc { }
+unsafe impl Sync for JsonRpc { }
 
 
 
 
 // fn main (){
 //     let mut rpc = JsonRpc::new();
-//     rpc.add_method("hello", Box::new(hello));
-//     rpc.add_method("ice", Box::new(ice));
+//     rpc.register("hello", Box::new(hello));
+//     rpc.register("ice", Box::new(ice));
 //     let request1 = "{\"params\": [\"参数1\", \"param 2\"], \"jsonrpc\": \"2.0\", \"method\": \"ice\", \"id\": 1}";
 //     match RpcRequest::new(&request1) {
 //         Ok(rpc_request) => {
