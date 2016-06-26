@@ -1,24 +1,30 @@
 #![allow(dead_code)]
 #[warn(unused_attributes)]
 extern crate hyper;
+extern crate jsonrpc2;
 
-mod jsonrpc;
-
-use jsonrpc::{ JsonRpc, RpcResult, RpcRequest, json, ToJson };
+use jsonrpc2::{ 
+    JsonRpc, RpcResult, Request, Response, 
+    Error as RpcError, Json, ToJson 
+};
 
 use std::io::{ copy, Read, Write };
 use std::sync::{ Arc }; // Mutex
-// use std::sync::atomic::{AtomicUsize, Ordering};
 use std::env;
+use std::str::FromStr;
 
-use hyper::server::{ Server, Request, Response, Handler };
+use hyper::server::{ 
+    Server, Request as HyperRequest, 
+    Response as HyperResponse, 
+    Handler as HyperHandler
+};
 use hyper::method::Method::{ Get, Put, Post };
 use hyper::status::StatusCode; // { Ok, BadRequest, NotFound, MethodNotAllowed };
 
 
 // TODO: 给 RPC Method 增加 Share Memeory 支持.
-//          fn hello (sm: ShareMemoy , params: json::Json) -> RpcResult { }
-fn hello (params: &Option<json::Json>) -> RpcResult {
+//          fn hello (sm: ShareMemoy , params: Json) -> RpcResult { }
+fn hello (params: &Option<Json>) -> RpcResult {
     match params.as_ref() {
         Some(p) => {
             println!("Params: {:?}", p );
@@ -27,11 +33,10 @@ fn hello (params: &Option<json::Json>) -> RpcResult {
             println!("Params: Null" );
         }
     };
-    
     Ok("Hello World".to_json())
 }
 
-fn ice (params: &Option<json::Json>) -> RpcResult {
+fn ice (params: &Option<Json>) -> RpcResult {
     match params.as_ref() {
         Some(p) => {
             println!("Params: {:?}", p );
@@ -44,26 +49,11 @@ fn ice (params: &Option<json::Json>) -> RpcResult {
     Ok( data.to_json() )
 }
 
-fn test_rpc() {
-    let mut rpc = JsonRpc::new();
-    rpc.register("hello", Box::new(hello));
-    rpc.register("ice", Box::new(ice));
-    let request1 = "{\"params\": [\"参数1\", \"param 2\"], \"jsonrpc\": \"2.0\", \"method\": \"ice\", \"id\": 1}";
-    match RpcRequest::new(&request1) {
-        Ok(rpc_request) => {
-            println!("{}", rpc.call(&rpc_request).to_json().to_string() );
-        },
-        Err(e) => {
-            println!("Error:   {:?}", e);
-        }
-    }
-}
-
 struct MyHandler {
     rpc: Arc<JsonRpc>
 }
-impl Handler for MyHandler {
-    fn handle(&self, mut req: Request, mut res: Response) {
+impl HyperHandler for MyHandler {
+    fn handle(&self, mut req: HyperRequest, mut res: HyperResponse) {
         println!("{:?}", self.rpc.methods().len() );
         match req.method {
             Post | Put => {
@@ -74,7 +64,7 @@ impl Handler for MyHandler {
                     Ok(body_length) => {
                         println!("Body length: {:?}\n{:?}", body_length, body);
                         let mut res = &mut res.start().unwrap();
-                        match RpcRequest::new(&body) {
+                        match Request::from_str(&body) {
                             Ok(rpc_request) => {
                                 let response_content = self.rpc.call(&rpc_request).to_json().to_string();
                                 res.write(response_content.as_bytes()).unwrap();

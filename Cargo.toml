@@ -5,7 +5,6 @@ authors = ["Luo <gnulinux@126.com>"]
 
 [dependencies]
 
-time  = "*"
-rustc-serialize = "*"
-hyper = "*"
-# iron  = "*"
+time     = "*"
+hyper    = "*"
+jsonrpc2 = "*"
