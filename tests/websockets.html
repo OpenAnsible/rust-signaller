@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>WebSocket Test</title>
+        <script>
+            var Signaller = function (uri){
+                this.version = 0.1;
+                this.uri     = uri; // uri: "ws://127.0.0.1:3012"
+                this.socket  = new WebSocket(uri, []);
+            };
+            Signaller.prototype.onmessage = function(event) {
+                var message = event.data;
+                
+            };
+            Signaller.prototype.send = function(message) {
+                // message: {"method": "join"}
+
+            };
+
+            var socket = new WebSocket("ws://127.0.0.1:3012", []);
+            socket.onmessage = function (event) {
+                render_message(event.data);
+            };
+            function render_message(message){
+                var messages_dom = document.getElementById("inbox").getElementsByClassName("messages")[0];
+                var message_dom  = document.createElement('div');
+                message_dom.textContent = message;
+                messages_dom.appendChild(message_dom);
+            }
+            function send(element) {
+                var input = document.getElementById(element);
+                socket.send(input.value);
+                input.value = "";
+            }
+        </script>
+    </head>
+    
+    <body>
+        <div style="width: 600px; height: 400px; border: 1px solid black; margin-left: 20%">
+            <div class="left" style="width: 400px; height: 100%; margin: 0px 0px 0px 15px; float: left">
+                <div id="inbox" style="height: 360px">
+                    <div class="title">
+                        <strong>Received Messages:</strong>
+                    </div>
+                    <div class="messages" style="overflow: scroll; height: 320px">
+
+                    </div>
+                </div>
+                <form onsubmit="send('message'); return false">
+                    <input type="text" id="message" />
+                    <input type="submit" value="Send" />
+                </form>
+            </div>
+
+            <div class="right" style="width:130px; height: 100%; margin: 0px 0px 0px 15px; border: 1px solid black; float: right">
+                    <div class="title">
+                        <strong>Peers:</strong>
+                    </div>
+                <div class="peers">
+                    <div class="peer">
+                        Peer 1
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
