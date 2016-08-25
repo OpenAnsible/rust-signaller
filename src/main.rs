@@ -4,62 +4,97 @@ extern crate log;
 extern crate env_logger;
 extern crate ws;
 extern crate bson;
+extern crate rustc_serialize;
 
 use std::str::FromStr;
 use std::string::ToString;
-pub use std::collections::BTreeMap;
+
 pub use std::net::SocketAddr;
 
-use ws::{ // connect, listen
-    WebSocket, CloseCode, 
-    Handler, Handshake,
-    Message, Result, Error
-};
-
-pub use ws::Sender;
-pub use ws::util::Token;
+// pub use ws::util::Token;
 pub use bson::oid::ObjectId;
+pub use rustc_serialize::{json, Decodable, Encodable};
 pub use rustc_serialize::json::{Json, ToJson, Object};
 pub use rustc_serialize::hex::ToHex;
 
-mod channels;
-mod peer;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::HashMap;
+pub use std::collections::BTreeMap;
 
-pub use channels::{Channel, Channels};
-pub use peer::{Peer, Peers};
+// mod channel;
+// mod peer;
+mod message;
 
+
+
+// pub use channel::{Channel, Channels};
+// pub use peer::{Peer, Peers};
+
+pub type Registry = Rc<RefCell<HashMap<ObjectId, ws::Sender>>>;
 
 struct Server {
-    out: Sender,
-    channels: Channels
+    oid: ObjectId,
+    out: ws::Sender,
+    registry: Registry,
+    // channels: Channels
 }
 
-impl Handler for Server {
-    fn on_open(&mut self, shake: Handshake) -> Result<()> {
-        println!("Peer Addr: {:?} Token: {:?}", 
-            shake.remote_addr().unwrap().unwrap().to_string(), self.out.token() );
+impl ws::Handler for Server {
+    fn on_open(&mut self, shake: ws::Handshake) -> ws::Result<()> {
+        println!("Peer Addr: {:?} Token: {:?} oid: {:?}", 
+            shake.remote_addr().unwrap().unwrap().to_string(), self.out.token(), self.oid );
         // println!("Peer Socket Addr: {:?}", shake.local_addr);
-
+        // self.out.close(ws::CloseCode::Normal);
+        self.registry.borrow_mut().insert(self.oid.clone(), self.out.clone());
         Ok(())
     }
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        println!("Server got message '{}'. ", msg);
-        self.out.send(msg)
+    fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
+        match msg.as_text() {
+            Ok(msg) => {
+                match message::Request::from_str(&msg){
+                    Ok(req) => {
+                        // println!("Request: {:?}", req);
+                        match message::Response::from_request(&req, &self.registry.clone(), self.oid.clone() ){
+                            Ok(res) => {
+                                // println!("Response: {:?}", res);
+                                self.out.send( res.to_json().to_string() )
+                            },
+                            Err(_)  => {
+                                self.out.send(format!("Response Error.") )
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        self.out.send(format!("Request Parse Error.") )
+                    }
+                }
+            },
+            Err(_) => {
+                self.out.send(format!("ASCII Error.") )
+            }
+        }
     }
-    fn on_close(&mut self, code: CloseCode, reason: &str) {
+    fn on_close(&mut self, code: ws::CloseCode, reason: &str) {
         println!("WebSocket closing by ({:?}) for ({:?}:{}) ", self.out.token(), code, reason);
-        // self.out.shutdown().unwrap();
+        self.registry.borrow_mut().remove(&self.oid);
     }
-    fn on_error(&mut self, err: Error) {
+    fn on_error(&mut self, err: ws::Error) {
         println!("{:?}", err);
     }
 }
 
 impl Server {
     fn run(host: &str){
-        // listen(host, |out| { Server { out: out } })
-        let ws = WebSocket::new(|out|{
-            Server { out: out, channels: Channels::empty() }
+        let registry: Registry = Rc::new(RefCell::new(HashMap::new()));
+        println!("WebSocket Server running on {}", host);
+        let ws = ws::WebSocket::new(|out|{
+            Server { 
+                oid: bson::oid::ObjectId::new().unwrap(), 
+                out: out, 
+                registry: registry.clone(),
+                // channels: Channels::empty() 
+            }
         });
         match ws {
             Ok(ws) => {
@@ -69,19 +104,12 @@ impl Server {
             Err(e) => println!("WebSocket Server Running Error ({:?})", e)
         };
     }
-    fn channels(&self) -> Channels {
-        self.channels
-    }
-    fn join(&self, channel_id: ObjectId, token: Option<String>, ) -> Result<Vec<Channels>> {
-        
-    }
-    fn leave(&self, channel_id: ObjectId) -> bool {
-        false
-    }
-    fn broadcast(&self, channel_id: ObjectId) -> bool {
-        false
-    }
 }
+// impl ToJson for bson::oid::ObjectId {
+//     fn to_json(&self) -> Json {
+//         self.to_hex().to_json()
+//     }
+// }
 
 fn main (){
     // let args: Vec<String> = env::args().collect();
