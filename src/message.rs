@@ -93,12 +93,21 @@ impl FromStr for Request {
             None        => return Err(())
         };
         let target = match obj.get("target") {
-            Some(target) => match target.as_string(){
-                Some(target) => match ObjectId::with_string(target){
-                    Ok(oid)  => Some(oid),
-                    Err(_)   => return Err(())
-                },
-                None => return Err(())
+            Some(target) => {
+                if target.is_null() {
+                    None
+                } else if target.is_string() {
+                    match target.as_string(){
+                        Some(target) => match ObjectId::with_string(target){
+                            Ok(oid)  => Some(oid),
+                            Err(_)   => return Err(())
+                        },
+                        None => return Err(())
+                    }
+                } else {
+                    return Err(())
+                }
+                
             },
             None         => None
         };
@@ -219,10 +228,31 @@ impl Response {
                 }
             },
             Event::Msg => {
-                let mut e = BTreeMap::new();
-                e.insert("code".to_string(),    500usize.to_json() );
-                e.insert("message".to_string(), "功能未实现".to_json() );
-                Ok(Response::Error(Some(req.id()), Json::Object(e)))
+                match req.target(){
+                    Some(ref target) => match registry.borrow().get(target){
+                        Some(target_conn) => {
+                            let mut obj = req.to_json().as_object_mut().unwrap().clone();
+                            obj.insert("from".to_string(), from.to_hex().to_json() );
+                            target_conn.send(Json::Object(obj.clone()).to_string());
+                            Ok(Response::Success(Some(req.id()), Json::String("ok".to_string())))
+                        },
+                        None              => {
+                            let mut e = BTreeMap::new();
+                            e.insert("code".to_string(),    404usize.to_json() );
+                            e.insert("message".to_string(), "目标不存在".to_json() );
+                            Ok(Response::Error(Some(req.id()), Json::Object(e)))
+                        }
+                    },
+                    None => {
+                        let mut obj = req.to_json().as_object_mut().unwrap().clone();
+                        obj.insert("from".to_string(), from.to_hex().to_json() );
+                        let _msg = Json::Object(obj.clone()).to_string();
+                        for conn in registry.borrow().values() {
+                            conn.send(_msg.clone());
+                        }
+                        Ok(Response::Success(Some(req.id()), Json::String("ok".to_string())))
+                    }
+                }
             },
             Event::Candidate => {
                 match req.target(){

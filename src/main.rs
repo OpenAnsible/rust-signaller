@@ -1,7 +1,7 @@
 
-#[macro_use(debug, error, info, log, log_enabled, trace, warn)]
-extern crate log;
-extern crate env_logger;
+// #[macro_use(debug, error, info, log, log_enabled, trace, warn)]
+// extern crate log;
+// extern crate env_logger;
 extern crate ws;
 extern crate bson;
 extern crate rustc_serialize;
@@ -11,7 +11,6 @@ use std::string::ToString;
 
 pub use std::net::SocketAddr;
 
-// pub use ws::util::Token;
 pub use bson::oid::ObjectId;
 pub use rustc_serialize::{json, Decodable, Encodable};
 pub use rustc_serialize::json::{Json, ToJson, Object};
@@ -22,22 +21,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 pub use std::collections::BTreeMap;
 
-// mod channel;
-// mod peer;
 mod message;
-
-
-
-// pub use channel::{Channel, Channels};
-// pub use peer::{Peer, Peers};
 
 pub type Registry = Rc<RefCell<HashMap<ObjectId, ws::Sender>>>;
 
 struct Server {
     oid: ObjectId,
     out: ws::Sender,
-    registry: Registry,
-    // channels: Channels
+    registry: Registry
 }
 
 impl ws::Handler for Server {
@@ -54,10 +45,8 @@ impl ws::Handler for Server {
             Ok(msg) => {
                 match message::Request::from_str(&msg){
                     Ok(req) => {
-                        // println!("Request: {:?}", req);
                         match message::Response::from_request(&req, &self.registry.clone(), self.oid.clone() ){
                             Ok(res) => {
-                                // println!("Response: {:?}", res);
                                 self.out.send( res.to_json().to_string() )
                             },
                             Err(_)  => {
@@ -92,8 +81,7 @@ impl Server {
             Server { 
                 oid: bson::oid::ObjectId::new().unwrap(), 
                 out: out, 
-                registry: registry.clone(),
-                // channels: Channels::empty() 
+                registry: registry.clone()
             }
         });
         match ws {
@@ -105,15 +93,10 @@ impl Server {
         };
     }
 }
-// impl ToJson for bson::oid::ObjectId {
-//     fn to_json(&self) -> Json {
-//         self.to_hex().to_json()
-//     }
-// }
 
 fn main (){
     // let args: Vec<String> = env::args().collect();
-    env_logger::init().unwrap();
+    // env_logger::init().unwrap();
 
     let host = "127.0.0.1:3012";
     Server::run(host);
